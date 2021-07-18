@@ -32,6 +32,7 @@ theme: jekyll-theme-hacker
 plugins:
   - jekyll-feed
   - jekyll-toc
+  - jekyll-github-metadata
 
 # Exclude from processing.
 # The following items will not be processed, by default.
