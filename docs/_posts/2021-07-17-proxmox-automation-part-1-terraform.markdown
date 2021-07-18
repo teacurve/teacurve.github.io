@@ -137,7 +137,7 @@ Once you have the Terraform CLI working, create a folder for your terraform 'cod
 
 You'll need to specify credentials for Terraform to use to interact with the Proxmox API. You can either use a username/password, or an API token. It's simple to do either way, but I used a token. 
 
-One of the great things about Proxmox is it's useful wiki. The relevant pages are [Proxmox VE API](https://pve.proxmox.com/wiki/Proxmox_VE_API){:target="_blank"} and [User Management](https://pve.proxmox.com/wiki/User_Management#pveum_tokens){:target="_blank"}.
+One of the great things about Proxmox is its useful wiki. The relevant pages are [Proxmox VE API](https://pve.proxmox.com/wiki/Proxmox_VE_API){:target="_blank"} and [User Management](https://pve.proxmox.com/wiki/User_Management#pveum_tokens){:target="_blank"}.
 
 To create an API token, go to Datacenter -> Permissions -> API Tokens -> Add. Because I'm lazy, I created it for the root user and *unchecked Privilege Separation*. This means the token has access to everything th root user does. In the future, I may go back and try and figure out what the least privilege that I really need is, but for now, since I'm the only user of the server, it's fine.
 
@@ -509,11 +509,14 @@ provider "proxmox" {
 
 ### Invalid boot disk
 
-Make sure you a) get the right img file (not 'disk'), and b) set the disk image to the template after importing it like:
+First, Make sure you downloaded the right img file. For the focal image, the one with 'disk' in the name will not boot. Second, check you set the disk image to the template after importing it like:
 
 ```
-qm set $next_id --scsihw virtio-scsi-pci --scsi0 "local-lvm:vm-138-disk-0"     
+qm set 138 --scsihw virtio-scsi-pci --scsi0 "local-lvm:vm-138-disk-0"     
 ```
+
+If you didn't, it will show up as 'unused' in the VM template (and instance).
+
 
 ### Slow vm creation (10+ minutes) or don't get dhcp IP output
 
