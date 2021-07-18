@@ -22,7 +22,7 @@ title: Teacurve
 email: teacurve@gmmail.com
 description: >- # this means to ignore newlines until "baseurl:"
   Teacurve
-# baseurl: "/teacurve" # the subpath of your site, e.g. /blog
+baseurl: ""
 url: "https://teacurve.github.io" # the base hostname & protocol for your site, e.g. http://example.com
 twitter_username: teacurve
 github_username:  teacurve
