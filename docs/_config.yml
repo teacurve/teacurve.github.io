@@ -22,8 +22,9 @@ title: Teacurve
 email: teacurve@gmmail.com
 description: >- # this means to ignore newlines until "baseurl:"
   Teacurve
-# baseurl: "/teacurve" # the subpath of your site, e.g. /blog
+baseurl: ""
 url: "https://teacurve.github.io" # the base hostname & protocol for your site, e.g. http://example.com
+repository: teacurve/teacurve.github.io
 twitter_username: teacurve
 github_username:  teacurve
 
@@ -32,6 +33,7 @@ theme: jekyll-theme-hacker
 plugins:
   - jekyll-feed
   - jekyll-toc
+  - jekyll-github-metadata
 
 # Exclude from processing.
 # The following items will not be processed, by default.
