@@ -3,12 +3,23 @@
 # To modify the layout, see https://jekyllrb.com/docs/themes/#overriding-theme-defaults
 
 layout: default
+title: teacurve
 ---
 
-This is my index page
 
-# Title 1
+## Recent Posts
 
-Stuff
+<ul>
+  {% for post in site.posts %}
+    <li>
+      <a href="{{ post.url }}">{{ post.title }}</a>
+    </li>
+  {% endfor %}
+</ul>
 
-## Here we can see a title 2
+
+## Find posts
+
+- [Posts by Tag]({{ site.baseurl }}{% link tags.markdown %})
+
+- [Posts by Category]({{ site.baseurl }}{% link categories.markdown %})
