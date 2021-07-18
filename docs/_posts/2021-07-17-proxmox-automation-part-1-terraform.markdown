@@ -4,6 +4,7 @@ title:  "Proxmox Automation Part 1: Terraform with Proxmox and cloud-init"
 date:   2021-07-17 21:10:00 +0000
 tags:   virtualization proxmox cloud-init terraform infrastructure automation
 author: teacurve
+toc: true
 ---
 
 ## Introduction
