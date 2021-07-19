@@ -2,6 +2,7 @@
 layout: post
 title:  "Proxmox Automation Part 1: Terraform with Proxmox and cloud-init"
 date:   2021-07-17 21:10:00 +0000
+updated:   2021-07-19 18:10:00 +0000
 tags:   virtualization proxmox cloud-init terraform infrastructure automation
 author: teacurve
 toc: true
@@ -69,8 +70,41 @@ And then slipstream the agent into it:
 virt-customize -a focal-server-cloudimg-amd64-agent.img --install qemu-guest-agent
 ```
 
+If you leave the image like this everything will work, but clones will have the same [`/etc/machine-id`](https://www.freedesktop.org/software/systemd/man/machine-id.html){:target="_blank"}. This can mess up all sorts of things, including DHCP - you can get [duplicate addresses handed out](https://techblog.jeppson.org/2020/05/ubuntu-20-04-cloned-vm-same-dhcp-ip-fix/){:target="_blank"}. To fix this, you also need to run:
+
+```
+virt-sysprep --operations machine-id -a focal-server-cloudimg-amd64-agent.img
+```
+
+Which will reset the machine-id.
+
 We now have a ubuntu server cloud-ready image with qemu-guest-agent present.
 
+#### Templace creation script
+
+I created a script that does the above for you:
+
+```
+#!/bin/bash
+
+wget https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img
+
+next_id=`pvesh get /cluster/nextid`
+
+qm create $next_id --memory 2048 --net0 virtio,bridge=vmbr0
+
+cp focal-server-cloudimg-amd64.img focal-server-cloudimg-amd64-agent.img
+virt-customize -a focal-server-cloudimg-amd64-agent.img --install qemu-guest-agent
+virt-sysprep --operations machine-id -a focal-server-cloudimg-amd64-agent.img
+qm importdisk $next_id focal-server-cloudimg-amd64-agent.img local-lvm
+qm set $next_id --scsihw virtio-scsi-pci --scsi0 "local-lvm:vm-$next_id-disk-0"
+
+qm set $next_id --ide2 local-lvm:cloudinit
+qm set $next_id -boot c --bootdisk scsi0
+qm set $next_id --agent enabled=1
+qm set $next_id --name "ubuntu-cloudready-template"
+qm template $next_id
+```
 
 #### Create the VM Template
 
