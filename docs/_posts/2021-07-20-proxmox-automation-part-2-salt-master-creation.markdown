@@ -1,8 +1,8 @@
 ---
 layout: post
 title:  "Proxmox Automation Part 2: Automate Salt master creation with cloud-init and Terraform"
-date:   2021-07-20 11:50:00 +0000
-date:   2021-07-20 11:50:00 +0000
+date:   2021-08-01 16:30:00 +0000
+updated:   2021-08-01 16:30:00 +0000
 tags:   virtualization proxmox cloud-init terraform salt infrastructure automation
 author: teacurve
 toc: true
