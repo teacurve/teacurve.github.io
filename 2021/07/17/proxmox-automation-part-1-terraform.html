@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/assets/css/style.css?v=81d3e2955c7141aef49e62f16e173bd9a7325cf2">
+
+<!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>Proxmox Automation Part 1: Terraform with Proxmox and cloud-init | Teacurve</title>
+<meta name="generator" content="Jekyll v3.9.0" />
+<meta property="og:title" content="Proxmox Automation Part 1: Terraform with Proxmox and cloud-init" />
+<meta name="author" content="teacurve" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Introduction" />
+<meta property="og:description" content="Introduction" />
+<link rel="canonical" href="https://teacurve.github.io/2021/07/17/proxmox-automation-part-1-terraform.html" />
+<meta property="og:url" content="https://teacurve.github.io/2021/07/17/proxmox-automation-part-1-terraform.html" />
+<meta property="og:site_name" content="Teacurve" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-07-17T21:10:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Proxmox Automation Part 1: Terraform with Proxmox and cloud-init" />
+<script type="application/ld+json">
+{"author":{"@type":"Person","name":"teacurve"},"description":"Introduction","url":"https://teacurve.github.io/2021/07/17/proxmox-automation-part-1-terraform.html","headline":"Proxmox Automation Part 1: Terraform with Proxmox and cloud-init","@type":"BlogPosting","dateModified":"2021-07-17T21:10:00+00:00","datePublished":"2021-07-17T21:10:00+00:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://teacurve.github.io/2021/07/17/proxmox-automation-part-1-terraform.html"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+  </head>
+
+  <body>
+
+    <header>
+      <div class="container">
+        <a id="a-title" href="/">
+          <h1>Teacurve</h1>
+        </a>
+        <h2>Teacurve</h2>
+
+        <section id="downloads">
+          
+          <a href="https://github.com/teacurve/teacurve.github.io" class="btn btn-github"><span class="icon"></span>View on GitHub</a>
+        </section>
+      </div>
+    </header>
+
+    <div class="container">
+      <section id="main_content">
+        <h1>Proxmox Automation Part 1: Terraform with Proxmox and cloud-init</h1>
+
+<p class="view">by teacurve</p>
+<p><small>Posted: 17 July 2021, Last Updated: 19 July 2021</small></p>
+
+
+<ul id="toc" class="section-nav">
+<li class="toc-entry toc-h2"><a href="#introduction">Introduction</a></li>
+<li class="toc-entry toc-h2"><a href="#overview">Overview</a></li>
+<li class="toc-entry toc-h2"><a href="#details">Details</a>
+<ul>
+<li class="toc-entry toc-h3"><a href="#step-1---create-a-cloud-init-template">Step 1 - Create a cloud-init template</a>
+<ul>
+<li class="toc-entry toc-h4"><a href="#get-the-image">Get the image</a></li>
+<li class="toc-entry toc-h4"><a href="#prep-the-image">Prep the image</a></li>
+<li class="toc-entry toc-h4"><a href="#templace-creation-script">Templace creation script</a></li>
+<li class="toc-entry toc-h4"><a href="#create-the-vm-template">Create the VM Template</a></li>
+</ul>
+</li>
+<li class="toc-entry toc-h3"><a href="#step-2---basic-terraform-configuration">Step 2 - Basic Terraform Configuration</a>
+<ul>
+<li class="toc-entry toc-h4"><a href="#secrets">Secrets</a></li>
+<li class="toc-entry toc-h4"><a href="#providers">Providers</a></li>
+<li class="toc-entry toc-h4"><a href="#test-proxmox-works">Test Proxmox works</a></li>
+</ul>
+</li>
+<li class="toc-entry toc-h3"><a href="#step-3---proxmox-terraform-time">Step 3 - Proxmox Terraform time</a>
+<ul>
+<li class="toc-entry toc-h4"><a href="#describe-the-instance">Describe the instance</a></li>
+<li class="toc-entry toc-h4"><a href="#instantiate">Instantiate!</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-entry toc-h2"><a href="#references">References</a></li>
+<li class="toc-entry toc-h2"><a href="#troubleshooting">Troubleshooting</a>
+<ul>
+<li class="toc-entry toc-h3"><a href="#add-logging">Add Logging</a></li>
+<li class="toc-entry toc-h3"><a href="#invalid-boot-disk">Invalid boot disk</a></li>
+<li class="toc-entry toc-h3"><a href="#slow-vm-creation-10-minutes-or-dont-get-dhcp-ip-output">Slow vm creation (10+ minutes) or don’t get dhcp IP output</a></li>
+<li class="toc-entry toc-h3"><a href="#terraform-plugin-crash">Terraform plugin crash</a></li>
+</ul>
+</li>
+<li class="toc-entry toc-h2"><a href="#conclusion">Conclusion</a></li>
+</ul><h2 id="introduction">
+<a class="anchor" href="#introduction" aria-hidden="true"><span class="octicon octicon-link"></span></a>Introduction</h2>
+
+<p><a href="https://www.terraform.io/" target="_blank">Terraform</a> is an infrastructure-as-code system that allows you to define an environment in a text file, and repeatably bring that environment to life on a variety of platforms (AWS, Azure, etc).</p>
+
+<p>I’ve tried out several different virtualization providers, but recently I have been running <a href="https://pve.proxmox.com/wiki/Main_Page" target="_blank">Proxmox</a> (based on QEMU/KVM) in my home lab. I think Proxmox is fantastic for a homelab; it has a LOT of really advanced features (you can send a vm between clustered nodes, and it actually works), a usable web interface, and even a REST API. For enterprise use it’s a little rough around the edges (at least the community version is), but for me it’s great.</p>
+
+<p>I don’t really do much ‘devops’ but I do like repeatable environments. Normally I will just manually create VMs for research (or hosting services at home), but I document here how I got Terraform working with Proxmox to automate the creation of a <code class="language-plaintext highlighter-rouge">cloud-init</code> Ubuntu Server VM.</p>
+
+<h2 id="overview">
+<a class="anchor" href="#overview" aria-hidden="true"><span class="octicon octicon-link"></span></a>Overview</h2>
+
+<p>Just so we’re on the same page, here are the main components:</p>
+
+<ul>
+  <li>Terraform - An infrastructure-as-code system</li>
+  <li>Proxmox - A virtualization server (like ESXi)</li>
+  <li>cloud-init - A standardized way of customizing cloud instances (basically how we specify some things about a new instance from a template)</li>
+</ul>
+
+<p>In our case, we’ll use Ubuntu as the OS for the new instance. I also happened to use Ubuntu as the machine from which I used Terraform, but Terraform runs on other operating systems, including Windows.</p>
+
+<p>I have looked at various tutorials and sources of documentation, and provided a list in <a href="#references">References</a> of some that might be helpful. I’ve also compiled a list of issues that I ran in to in the <a href="#troubleshooting">Troubleshooting</a> Section, which you should check if you have problems following.</p>
+
+<h2 id="details">
+<a class="anchor" href="#details" aria-hidden="true"><span class="octicon octicon-link"></span></a>Details</h2>
+
+<h3 id="step-1---create-a-cloud-init-template">
+<a class="anchor" href="#step-1---create-a-cloud-init-template" aria-hidden="true"><span class="octicon octicon-link"></span></a>Step 1 - Create a cloud-init template</h3>
+
+<p>There are essentially two ways of doing this. The first is to create a ‘golden image’ template of the OS you want, configure it how you like, and then convert to a template. Not only is this laborious for multiple templates, but you can run into issues if you do not prep the image correctly.</p>
+
+<h4 id="get-the-image">
+<a class="anchor" href="#get-the-image" aria-hidden="true"><span class="octicon octicon-link"></span></a>Get the image</h4>
+
+<p>Luckily, since everyone uses the cloud now, many operating systems provide ‘cloud-ready’ images for us to use. <code class="language-plaintext highlighter-rouge">cloud-init</code> is the standard way of doing this. In my case, I wanted a Ubuntu Server template, and they do provide cloud-ready images, which you can browse <a href="https://cloud-images.ubuntu.co" target="_blank">here</a>. So, on the Proxmox server, download the chosen image:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>wget wget https://cloud-images.ubuntu.com/focal/current/focal-server=cloudimg-amd64.img
+</code></pre></div></div>
+
+<h4 id="prep-the-image">
+<a class="anchor" href="#prep-the-image" aria-hidden="true"><span class="octicon octicon-link"></span></a>Prep the image</h4>
+
+<p>Since proxmox is KVM/QEMU based, it’s very helpful to have the QEMU guest agent installed in the image. In fact, I found not having it caused issues with the telmate/proxmox provider. Of course, the Proxmox wiki has a page on it <a href="https://pve.proxmox.com/wiki/Qemu-guest-agent" target="_blank">here</a>.</p>
+
+<p>There’s a really cool project called <code class="language-plaintext highlighter-rouge">libguestfs</code> that contains tools for accessing and modifying disk images like ours. Install it with:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>apt install libguestfs-tools
+</code></pre></div></div>
+
+<p>Then make a copy of the image file (just in case…):</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cp focal-server-cloudimg-amd64.img focal-server-cloudimg-amd64-agent.img
+</code></pre></div></div>
+
+<p>And then slipstream the agent into it:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>virt-customize -a focal-server-cloudimg-amd64-agent.img --install qemu-guest-agent
+</code></pre></div></div>
+
+<p>If you leave the image like this everything will work, but clones will have the same <a href="https://www.freedesktop.org/software/systemd/man/machine-id.html" target="_blank"><code class="language-plaintext highlighter-rouge">/etc/machine-id</code></a>. This can mess up all sorts of things, including DHCP - you can get <a href="https://techblog.jeppson.org/2020/05/ubuntu-20-04-cloned-vm-same-dhcp-ip-fix/" target="_blank">duplicate addresses handed out</a>. To fix this, you also need to run:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>virt-sysprep --operations machine-id -a focal-server-cloudimg-amd64-agent.img
+</code></pre></div></div>
+
+<p>Which will reset the machine-id.</p>
+
+<p>We now have a ubuntu server cloud-ready image with qemu-guest-agent present.</p>
+
+<h4 id="templace-creation-script">
+<a class="anchor" href="#templace-creation-script" aria-hidden="true"><span class="octicon octicon-link"></span></a>Templace creation script</h4>
+
+<p>I created a script that does the above for you:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>#!/bin/bash
+
+wget https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img
+
+next_id=`pvesh get /cluster/nextid`
+
+qm create $next_id --memory 2048 --net0 virtio,bridge=vmbr0
+
+cp focal-server-cloudimg-amd64.img focal-server-cloudimg-amd64-agent.img
+virt-customize -a focal-server-cloudimg-amd64-agent.img --install qemu-guest-agent
+virt-sysprep --operations machine-id -a focal-server-cloudimg-amd64-agent.img
+qm importdisk $next_id focal-server-cloudimg-amd64-agent.img local-lvm
+qm set $next_id --scsihw virtio-scsi-pci --scsi0 "local-lvm:vm-$next_id-disk-0"
+
+qm set $next_id --ide2 local-lvm:cloudinit
+qm set $next_id -boot c --bootdisk scsi0
+qm set $next_id --agent enabled=1
+qm set $next_id --name "ubuntu-cloudready-template"
+qm template $next_id
+</code></pre></div></div>
+
+<h4 id="create-the-vm-template">
+<a class="anchor" href="#create-the-vm-template" aria-hidden="true"><span class="octicon octicon-link"></span></a>Create the VM Template</h4>
+
+<p>First, get the next available VM ID:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pvesh get /cluster/nextid
+</code></pre></div></div>
+
+<p>Now, create a new VM with that ID:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>qm create 138 --name "ubuntu-cloudready-template" --memory 2048 --net0 virtio,bridge=vmbr0
+</code></pre></div></div>
+
+<p>You want to have minimum specs, but that will depend on the OS. You’re also free to change the bridge, or any other settings. But all of it is modifiable for new instances, so it doesn’t matter too much.</p>
+
+<p>Import the image we modified, and set it as the vm disk:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>qm importdisk 138 focal-server-cloudimg-amd64-agent.img local-lvm
+qm set 138 --scsihw virtio-scsi-pci --scsi0 local-lvm:vm-138-disk-0
+</code></pre></div></div>
+
+<p>Next, attach the cloud init disk (a magical auto-generated cd-rom device):</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>qm set 138 --ide2 local-lvm:cloudinit
+</code></pre></div></div>
+
+<p>Set the boot disk to be the new one:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>qm set 138 -boot c --bootdisk scsi0
+</code></pre></div></div>
+
+<p>Enable qemu-agent:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>qm set 138 --agent enabled=1
+</code></pre></div></div>
+
+<p>Finally, make the VM as a template. Whilst not strictly necessary, it speeds up clone times.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>qm template 138
+</code></pre></div></div>
+
+<p>If you look in your Proxmox GUI, you’ll find a new template VM in there.</p>
+
+<h3 id="step-2---basic-terraform-configuration">
+<a class="anchor" href="#step-2---basic-terraform-configuration" aria-hidden="true"><span class="octicon octicon-link"></span></a>Step 2 - Basic Terraform Configuration</h3>
+
+<p>Now, you’ll need to <a href="https://learn.hashicorp.com/tutorials/terraform/install-cli" target="_blank">install Terraform</a> according to their docs. I installed the autocomplete too.</p>
+
+<p>Once you have the Terraform CLI working, create a folder for your terraform ‘code’:</p>
+
+<p><code class="language-plaintext highlighter-rouge">mkdir terraform &amp;&amp; cd terraform</code></p>
+
+<h4 id="secrets">
+<a class="anchor" href="#secrets" aria-hidden="true"><span class="octicon octicon-link"></span></a>Secrets</h4>
+
+<p>You’ll need to specify credentials for Terraform to use to interact with the Proxmox API. You can either use a username/password, or an API token. It’s simple to do either way, but I used a token.</p>
+
+<p>One of the great things about Proxmox is its useful wiki. The relevant pages are <a href="https://pve.proxmox.com/wiki/Proxmox_VE_API" target="_blank">Proxmox VE API</a> and <a href="https://pve.proxmox.com/wiki/User_Management#pveum_tokens" target="_blank">User Management</a>.</p>
+
+<p>To create an API token, go to Datacenter -&gt; Permissions -&gt; API Tokens -&gt; Add. Because I’m lazy, I created it for the root user and <em>unchecked Privilege Separation</em>. This means the token has access to everything th root user does. In the future, I may go back and try and figure out what the least privilege that I really need is, but for now, since I’m the only user of the server, it’s fine.</p>
+
+<p>Like all code automation, secrets are difficult to handle. You can do some fancier things with Vaults, but for my purposes it is enough to have them in environment variables. To do this, export the variables in your <code class="language-plaintext highlighter-rouge">.bashrc</code>:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>export PM_API_TOKEN_ID="root@pam!terraform"
+export PM_API_TOKEN_SECRET="&lt;secret&gt;"
+</code></pre></div></div>
+
+<p>And don’t forget to <code class="language-plaintext highlighter-rouge">source ~/.bashrc</code> afterwards.</p>
+
+<h4 id="providers">
+<a class="anchor" href="#providers" aria-hidden="true"><span class="octicon octicon-link"></span></a>Providers</h4>
+
+<p>Terraform has a plugin-architecture where ‘Providers’ can be added to interact with different backends. Most people use Terraform with things like Heroku or AWS, but there is a third party provider for Proxmox; <a href="https://github.com/Telmate/terraform-provider-proxmox"><code class="language-plaintext highlighter-rouge">telmate/proxmox</code></a>. Terraform makes installing new providers easy - if you declare a provider is required, it will install it for you when running the <code class="language-plaintext highlighter-rouge">Terraform init</code> command.</p>
+
+<p>Create a file named <code class="language-plaintext highlighter-rouge">main.tf</code> with the following contents:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># PM_API_TOKEN_SECRET 
+# PM_API_TOKEN_ID 
+# (in .bashrc)
+
+terraform {
+  required_providers {
+    proxmox = {
+      source = "telmate/proxmox"
+      version = "2.7.4"
+    }
+  }
+}
+
+
+provider "proxmox" {
+    pm_api_url = "https://&lt;proxmox_ip&gt;:8006/api2/json"
+    pm_tls_insecure = "true"
+}
+</code></pre></div></div>
+
+<p>The version is the latest as of writing, I don’t know how to make this automatically update (using the string ‘latest’ didn’t work).</p>
+
+<p>This file specifies that a provider <code class="language-plaintext highlighter-rouge">telmate/proxmox</code> should be installed, and points it at our Proxmox server. If you have proper SSL certificate trust set up, by all means change <code class="language-plaintext highlighter-rouge">pm_tls_insecure</code>, but I need it since it’s just a self-signed certificate.</p>
+
+<p>Now, from this directory run</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>terraform init
+</code></pre></div></div>
+
+<p>And terraform will download and install the plugin for you.</p>
+
+<h4 id="test-proxmox-works">
+<a class="anchor" href="#test-proxmox-works" aria-hidden="true"><span class="octicon octicon-link"></span></a>Test Proxmox works</h4>
+
+<p>There doesn’t seem to be a good way to test that the proxmox provider can actually access the Proxmox server. But, if you enable debug logging and have a bare minimum proxmox resource, you can check the debug log and ensure you could get to it.</p>
+
+<p>First, enable debug as per the <a href="#add-logging">Add Logging</a> section of troubleshooting.</p>
+
+<p>Then, create a <code class="language-plaintext highlighter-rouge">vm.tf</code> file, and populate with the following:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>resource "proxmox_vm_qemu" "terravm01" {
+        name = "terravm"
+        target_node = "hades"
+}
+</code></pre></div></div>
+
+<p>Note; you’ll need to change the target_node to be whatever Proxmox node you want to use.</p>
+
+<p>Now, run terraform with:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>terraform apply
+</code></pre></div></div>
+
+<p>This will fail, but if you look inside the <code class="language-plaintext highlighter-rouge">terraform-plugin-proxmox.log</code> file, if it was successful you should see requests and replies from the server, at which point you know it’s working, and your credentials are correct.</p>
+
+<h3 id="step-3---proxmox-terraform-time">
+<a class="anchor" href="#step-3---proxmox-terraform-time" aria-hidden="true"><span class="octicon octicon-link"></span></a>Step 3 - Proxmox Terraform time</h3>
+
+<p>At this stage we have a proxmox VM Template available to clone from, and we have a basic terraform template. Now we need to expand it to define the new instance we want to create.</p>
+
+<h4 id="describe-the-instance">
+<a class="anchor" href="#describe-the-instance" aria-hidden="true"><span class="octicon octicon-link"></span></a>Describe the instance</h4>
+
+<p>Create <code class="language-plaintext highlighter-rouge">vm.tf</code> in the terraform folder (replace the contents if you created it in a previous step). This is the file in which we will define our instance. Terraform basically concatenates all the <code class="language-plaintext highlighter-rouge">.tf</code> files in a directory together (without recursing), so you can actually call this file whatever you want.</p>
+
+<p>Here’s my complete <code class="language-plaintext highlighter-rouge">vm.tf</code> file, which I’ll go through in detail below:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>resource "proxmox_vm_qemu" "terravm01" {
+  
+    name = "terravm01"
+    target_node = "hades"
+    clone = "ubuntu-cloudready-template"
+    os_type = "cloud-init"
+    balloon = 1024
+    boot = "order=scsi0"
+
+    agent = 1
+
+    cores = 2
+    sockets = 1
+    memory = 2560
+    
+    disk {  
+        size            = "10G"
+        type            = "scsi"
+        storage         = "local-lvm"
+    }
+    
+      vga {
+        type = "std"
+      }
+
+
+      # Set the network
+      network {
+          model = "virtio"
+          bridge = "vmbr0"
+      }
+
+    ipconfig0 = "ip=dhcp"
+    sshkeys = "${file("~/.ssh/id_rsa.pub")}"
+
+    # Ignore changes to the network
+    ## MAC address is generated on every apply, causing
+    ## TF to think this needs to be rebuilt on every apply
+    lifecycle {
+        ignore_changes = [
+            network
+        ]
+    }
+
+    connection {
+        type = "ssh"
+        user = "${self.ssh_user}"
+        private_key = "${file("~/.ssh/id_rsa")}"
+        host = "${self.ssh_host}"
+        port = "${self.ssh_port}"
+    }
+
+    provisioner "remote-exec" {
+    inline = [  
+      // here you will see the actual ip address        
+      "/sbin/ip a"  
+    ]      
+  }
+
+}
+
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>resource "proxmox_vm_qemu" "terravm01" {
+</code></pre></div></div>
+
+<p>Defines the resource named ‘terravm01’ which is of type ‘proxmox_vm_qemu’ - this type is defined by the telmate/proxmox provider we use. The name is irrelevant outside of the tf script.</p>
+
+<p>The first big chunk define some basic properties about the VM:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>name = "terravm01"
+target_node = "hades"
+clone = "ubuntu-cloudready-template"
+os_type = "cloud-init"
+balloon = 1024
+boot = "order=scsi0"
+
+agent = 1
+
+cores = 2
+sockets = 1
+memory = 2560
+</code></pre></div></div>
+
+<p>Most importantly we define the name (terravm01), the target node, and the vm we are cloning from (The ‘ubuntu-cloudready-template’ template we created previously).</p>
+
+<p>The os_type is special (cloud-init), balloon defines the minimum memory to give to the VM, and we specify the boot order just incase we forget to do it properly in the template.</p>
+
+<p>We also specified the agent is enabled, and give the VM 2 cores (1 socket) and 2.5 gigs of max memory (for it to balloon into).</p>
+
+<p>Next comes the disk block:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>disk {  
+        size            = "10G"
+        type            = "scsi"
+        storage         = "local-lvm"
+}
+</code></pre></div></div>
+
+<p>Where we define the disk for the VM. We give it 10 gigs, because it doesn’t need to be big.</p>
+
+<p>The next blog ‘vga’ seems to be required, and caused an error if I didn’t include it. I just set it as the standard.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>vga {
+  type = "std"
+}
+</code></pre></div></div>
+
+<p>The network block defines the network adapter for the instance. You can modify this as you wish (for example, if you’re creating an entire isolated network of machines).</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>network {
+    model = "virtio"
+    bridge = "vmbr0"
+}
+</code></pre></div></div>
+
+<p>In the next section we set some cloud-init properties for the proxmox VM. There are a few ways in which you can pass cloud-init properties through, I chose the easiest way. There is a more powerful method, in which you send over an actual cloud-init config file to the proxmox server for the instance. For now I really only want to configure the network and sshkey for the user.</p>
+
+<p>Here, I read the ssh public key from a local file with some dynamic code, but you can put the actual key in there too, if you prefer. The public key will be put into the ubuntu user’s <code class="language-plaintext highlighter-rouge">~/.ssh/authorized_keys</code> file.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ssh_user = "ubuntu"
+ipconfig0 = "ip=dhcp"
+sshkeys = "${file("~/.ssh/id_rsa.pub")}"
+</code></pre></div></div>
+
+<p>The lifecycle block is as the comment describes - a workaround to stop the recreation of the instance every time you do <code class="language-plaintext highlighter-rouge">terraform apply</code>.</p>
+
+<p>The next block describes how Terraform can connect to the instance after creation:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>connection {
+        type = "ssh"
+        user = "${self.ssh_user}"
+        private_key = "${file("~/.ssh/id_rsa")}"
+        host = "${self.ssh_host}"
+        port = "${self.ssh_port}"
+}
+</code></pre></div></div>
+
+<p>Mostly self explanatory, the private_key corresponds to the public key from the earlier <code class="language-plaintext highlighter-rouge">sshkey</code> variable.</p>
+
+<p>Finally, the remote exec provisioner block:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>provisioner "remote-exec" {
+    inline = [  
+      // here you will see the actual ip address        
+      "/sbin/ip a"  
+    ]   
+</code></pre></div></div>
+
+<p>This connects to the instance and dumps its ip address, which makes sure everything is working (and displays the ip we need to connect to)</p>
+
+<h4 id="instantiate">
+<a class="anchor" href="#instantiate" aria-hidden="true"><span class="octicon octicon-link"></span></a>Instantiate!</h4>
+
+<p>Run <code class="language-plaintext highlighter-rouge">terraform apply</code> to start up the instance. If you have errors in your <code class="language-plaintext highlighter-rouge">.tf</code> you can correct them and try again, if you have issues consult the <a href="#troubleshooting">Troublshooting</a> section below.</p>
+
+<p>If all goes to plan, you should see output like this:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  Enter a value: yes
+
+proxmox_vm_qemu.terravm01: Destroying... [id=hades/qemu/137]
+proxmox_vm_qemu.terravm01: Destruction complete after 4s
+proxmox_vm_qemu.terravm01: Creating...
+proxmox_vm_qemu.terravm01: Still creating... [10s elapsed]
+proxmox_vm_qemu.terravm01: Still creating... [20s elapsed]
+proxmox_vm_qemu.terravm01: Still creating... [30s elapsed]
+proxmox_vm_qemu.terravm01: Still creating... [40s elapsed]
+proxmox_vm_qemu.terravm01: Still creating... [50s elapsed]
+proxmox_vm_qemu.terravm01: Still creating... [1m0s elapsed]
+proxmox_vm_qemu.terravm01: Provisioning with 'remote-exec'...
+proxmox_vm_qemu.terravm01 (remote-exec): Connecting to remote host via SSH...
+proxmox_vm_qemu.terravm01 (remote-exec):   Host: 192.168.1.116
+proxmox_vm_qemu.terravm01 (remote-exec):   User: ubuntu
+proxmox_vm_qemu.terravm01 (remote-exec):   Password: false
+proxmox_vm_qemu.terravm01 (remote-exec):   Private key: true
+proxmox_vm_qemu.terravm01 (remote-exec):   Certificate: false
+proxmox_vm_qemu.terravm01 (remote-exec):   SSH Agent: false
+proxmox_vm_qemu.terravm01 (remote-exec):   Checking Host Key: false
+proxmox_vm_qemu.terravm01 (remote-exec):   Target Platform: unix
+proxmox_vm_qemu.terravm01 (remote-exec): Connected!
+proxmox_vm_qemu.terravm01 (remote-exec): 1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+proxmox_vm_qemu.terravm01 (remote-exec):     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+proxmox_vm_qemu.terravm01 (remote-exec):     inet 127.0.0.1/8 scope host lo
+proxmox_vm_qemu.terravm01 (remote-exec):        valid_lft forever preferred_lft forever
+proxmox_vm_qemu.terravm01 (remote-exec):     inet6 ::1/128 scope host
+proxmox_vm_qemu.terravm01 (remote-exec):        valid_lft forever preferred_lft forever
+proxmox_vm_qemu.terravm01 (remote-exec): 2: eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc fq_codel state UP group default qlen 1000
+proxmox_vm_qemu.terravm01 (remote-exec):     link/ether be:3e:70:fc:eb:28 brd ff:ff:ff:ff:ff:ff
+proxmox_vm_qemu.terravm01 (remote-exec):     inet 192.168.1.116/24 brd 192.168.1.255 scope global dynamic eth0
+proxmox_vm_qemu.terravm01 (remote-exec):        valid_lft 86394sec preferred_lft 86394sec
+proxmox_vm_qemu.terravm01 (remote-exec):     inet6 fe80::bc3e:70ff:fefc:eb28/64 scope link
+proxmox_vm_qemu.terravm01 (remote-exec):        valid_lft forever preferred_lft forever
+proxmox_vm_qemu.terravm01: Creation complete after 1m5s [id=hades/qemu/137]
+
+Apply complete! Resources: 1 added, 0 changed, 1 destroyed.
+manager@linux-manager:~/terraform$ 
+</code></pre></div></div>
+
+<p>And be able to log in to the new machine:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>manager@linux-manager:~/terraform$ ssh ubuntu@192.168.1.116
+Welcome to Ubuntu 20.04.2 LTS (GNU/Linux 5.4.0-77-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/advantage
+
+  System information as of Sun Jul 18 00:48:37 UTC 2021
+
+  System load:  0.18              Processes:             122
+  Usage of /:   15.1% of 9.52GB   Users logged in:       0
+  Memory usage: 14%               IPv4 address for eth0: 192.168.1.116
+  Swap usage:   0%
+
+
+0 updates can be applied immediately.
+
+
+Last login: Sun Jul 18 00:47:16 2021 from 192.168.1.136
+To run a command as administrator (user "root"), use "sudo &lt;command&gt;".
+See "man sudo_root" for details.
+
+ubuntu@terravm01:~$ 
+</code></pre></div></div>
+
+<p>Cool!</p>
+
+<h2 id="references">
+<a class="anchor" href="#references" aria-hidden="true"><span class="octicon octicon-link"></span></a>References</h2>
+
+<ul>
+  <li><a href="https://pve.proxmox.com/wiki/Cloud-Init_Support" target="_blank">Cloud-init support (Proxmox Wiki)</a></li>
+  <li><a href="https://github.com/Telmate/terraform-provider-proxmox/blob/master/docs/guides/cloud_init.md" target="_blank">Telmate/Proxmox Cloud-init guide (telmate)</a></li>
+  <li><a href="https://vectops.com/2020/05/provision-proxmox-vms-with-terraform-quick-and-easy/" target="_blank">Provision Proxmox VMs with Terraform Quick and Easy (vectops)</a></li>
+</ul>
+
+<h2 id="troubleshooting">
+<a class="anchor" href="#troubleshooting" aria-hidden="true"><span class="octicon octicon-link"></span></a>Troubleshooting</h2>
+
+<h3 id="add-logging">
+<a class="anchor" href="#add-logging" aria-hidden="true"><span class="octicon octicon-link"></span></a>Add Logging</h3>
+
+<p>You can increase logging output for both Terraform and the Proxmox provider. To debug Terraform issues, export the log level before running the terraform command:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>export TF_LOG=trace
+</code></pre></div></div>
+
+<p>See the available log levels <a href="https://www.terraform.io/docs/cli/config/environment-variables.html" target="_blank">here</a></p>
+
+<p>To enable debug logging in the provider, use the following provider block in your <code class="language-plaintext highlighter-rouge">main.tf</code> which specifies a log file:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>provider "proxmox" {
+  pm_api_url = "https://&lt;proxmox ip&gt;:8006/api2/json"
+  pm_tls_insecure = "true"
+  pm_log_enable = true
+  pm_log_file = "terraform-plugin-proxmox.log"
+  pm_log_levels = {
+    _default = "debug"
+    _capturelog = ""
+  }
+}
+</code></pre></div></div>
+
+<h3 id="invalid-boot-disk">
+<a class="anchor" href="#invalid-boot-disk" aria-hidden="true"><span class="octicon octicon-link"></span></a>Invalid boot disk</h3>
+
+<p>First, Make sure you downloaded the right img file. For the focal image, the one with ‘disk’ in the name will not boot. Second, check you set the disk image to the template after importing it like:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>qm set 138 --scsihw virtio-scsi-pci --scsi0 "local-lvm:vm-138-disk-0"     
+</code></pre></div></div>
+
+<p>If you didn’t, it will show up as ‘unused’ in the VM template (and instance).</p>
+
+<h3 id="slow-vm-creation-10-minutes-or-dont-get-dhcp-ip-output">
+<a class="anchor" href="#slow-vm-creation-10-minutes-or-dont-get-dhcp-ip-output" aria-hidden="true"><span class="octicon octicon-link"></span></a>Slow vm creation (10+ minutes) or don’t get dhcp IP output</h3>
+
+<p>Make sure you add the qemu agent to the template with virt-customize, and make sure you enable it in the template (and in the <code class="language-plaintext highlighter-rouge">.tf</code> file might be necessary too, not sure).</p>
+
+<h3 id="terraform-plugin-crash">
+<a class="anchor" href="#terraform-plugin-crash" aria-hidden="true"><span class="octicon octicon-link"></span></a>Terraform plugin crash</h3>
+
+<p>I had the plugin crash in:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>goroutine 38 [running]:
+github.com/Telmate/proxmox-api-go/proxmox.(*Client).GetVmRefsByName(0xc0004b0280, 0xc00032eb80, 0x9, 0xb9c6a0, 0xd82630, 0x0, 0x0, 0xc000209600)
+</code></pre></div></div>
+
+<p>Check your logs for something like:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>2021/07/18 00:52:43 [DEBUG] checking for duplicate name
+2021/07/18 00:52:43 &gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt; REQUEST:
+2021/07/18 00:52:48 &gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt; REQUEST:
+2021/07/18 00:52:53 &gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt; REQUEST:
+</code></pre></div></div>
+
+<p>In my case, it was because I had a typo in the proxmox url. Sure, the plugin have a better error, but we should probably give it proper urls :)</p>
+
+<h2 id="conclusion">
+<a class="anchor" href="#conclusion" aria-hidden="true"><span class="octicon octicon-link"></span></a>Conclusion</h2>
+
+<p>I hope you found this blog post useful. This is the first in a series on Proxmox automation. Here I described how to get up and running with Terraform and Proxmox, and we created a cloud-init Ubuntu Server templated and instantiated a clone of it automatically with different vm settings.</p>
+
+<p>In subsequent posts I plan extend this to include installing and configuring software on the new instances, and also to create more advanced networks of machines (like a kubernetes cluster, or a windows Active Directory domain).</p>
+
+
+
+  <small>tags: <em>virtualization</em> - <em>proxmox</em> - <em>cloud-init</em> - <em>terraform</em> - <em>infrastructure</em> - <em>automation</em></small>
+
+
+      </section>
+    </div>
+
+    
+  </body>
+</html>
